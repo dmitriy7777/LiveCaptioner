@@ -139,15 +139,65 @@
                     </ComboBox>
 
                     <TextBlock Text="Язык" Foreground="#9aa7bd" FontSize="11" Margin="0,18,0,5"/>
-                    <ComboBox x:Name="LanguageComboBox" SelectedIndex="0">
+                    <ComboBox x:Name="LanguageComboBox" SelectedIndex="2">
                         <ComboBoxItem Content="auto"/>
                         <ComboBoxItem Content="ru"/>
                         <ComboBoxItem Content="en"/>
                         <ComboBoxItem Content="uk"/>
                     </ComboBox>
 
+                    <TextBlock Text="Движок распознавания" Foreground="#9aa7bd" FontSize="11" Margin="0,18,0,5"/>
+                    <ComboBox x:Name="EngineComboBox" SelectedIndex="0" SelectionChanged="EngineComboBox_SelectionChanged">
+                        <ComboBoxItem Content="Whisper balanced" Tag="whisper-balanced"/>
+                        <ComboBoxItem Content="Whisper fast / raw" Tag="whisper-fast"/>
+                        <ComboBoxItem Content="Windows Speech Recognition" Tag="windows-speech"/>
+                        <ComboBoxItem Content="Vosk local" Tag="vosk-local"/>
+                    </ComboBox>
+
+                    <CheckBox x:Name="VoskPartialResultsCheckBox"
+                              Content="Vosk fast live text"
+                              IsChecked="True"
+                              Foreground="#dce5f3"
+                              Margin="0,10,0,0"/>
+
+                    <CheckBox x:Name="VoskInterviewVocabularyCheckBox"
+                              Content="Vosk interview vocabulary"
+                              IsChecked="True"
+                              Foreground="#dce5f3"
+                              Margin="0,6,0,0"/>
+
+                    <TextBlock Text="Vosk system audio gain" Foreground="#9aa7bd" FontSize="11" Margin="0,12,0,5"/>
+                    <Slider x:Name="VoskSystemAudioGainSlider" Minimum="0.5" Maximum="4" Value="1.6" TickFrequency="0.25" IsSnapToTickEnabled="True"/>
+                    <TextBlock Text="{Binding ElementName=VoskSystemAudioGainSlider, Path=Value, StringFormat={}{0:0.00}x}"
+                               Foreground="#dce5f3"
+                               FontSize="12"/>
+
+                    <CheckBox x:Name="VoskSystemNoiseGateCheckBox"
+                              Content="Vosk system noise gate"
+                              IsChecked="True"
+                              Foreground="#dce5f3"
+                              Margin="0,6,0,0"/>
+
+                    <CheckBox x:Name="VoskAutoSpeakerTurnsCheckBox"
+                              Content="Vosk auto speaker turns"
+                              IsChecked="True"
+                              Foreground="#dce5f3"
+                              Margin="0,6,0,0"/>
+
+                    <CheckBox x:Name="VoskSentenceFormattingCheckBox"
+                              Content="Vosk sentence formatting"
+                              IsChecked="True"
+                              Foreground="#dce5f3"
+                              Margin="0,6,0,0"/>
+
+                    <TextBlock Text="Модель Whisper" Foreground="#9aa7bd" FontSize="11" Margin="0,18,0,5"/>
+                    <ComboBox x:Name="ModelComboBox" SelectedIndex="0" SelectionChanged="ModelComboBox_SelectionChanged">
+                        <ComboBoxItem Content="base - быстрее, ниже точность" Tag="base"/>
+                        <ComboBoxItem Content="small - точнее, медленнее" Tag="small"/>
+                    </ComboBox>
+
                     <TextBlock Text="Длина аудио-куска, сек." Foreground="#9aa7bd" FontSize="11" Margin="0,16,0,5"/>
-                    <Slider x:Name="ChunkSecondsSlider" Minimum="3" Maximum="12" Value="5" TickFrequency="1" IsSnapToTickEnabled="True"/>
+                    <Slider x:Name="ChunkSecondsSlider" Minimum="1" Maximum="8" Value="3" TickFrequency="1" IsSnapToTickEnabled="True"/>
                     <TextBlock Text="{Binding ElementName=ChunkSecondsSlider, Path=Value, StringFormat={}{0:0} сек.}"
                                Foreground="#dce5f3"
                                FontSize="12"/>
