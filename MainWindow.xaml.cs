@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using LiveCaptioner.Models;
 using LiveCaptioner.Services.Audio;
+using LiveCaptioner.Services.Diagnostics;
 using LiveCaptioner.Services.Speech;
 using Microsoft.Win32;
 
@@ -17,7 +18,6 @@ public partial class MainWindow : Window
     private static readonly string ProjectRoot = FindProjectRoot();
     private static readonly TimeSpan LowLatencyOverlap = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan CaptionParagraphGap = TimeSpan.FromSeconds(3);
-    private static readonly TimeSpan StreamingSpeakerPause = TimeSpan.FromSeconds(1.4);
     private readonly WhisperModelManager _whisperModelManager = new(ProjectRoot);
     private readonly VoskSpeechRecognitionService _voskSpeechRecognition = new(ProjectRoot);
     private readonly ConcurrentQueue<AudioChunk> _pendingChunks = new();
@@ -27,8 +27,8 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _captionCancellation;
     private Task? _captionTask;
     private bool _isRunning;
-    private string _activeEngineKey = "whisper-balanced";
-    private string _activeLanguage = "auto";
+    private string _activeEngineKey = "vosk-local";
+    private string _activeLanguage = "ru";
     private string _activeAudioSourceName = "Микрофон";
     private string _lastCaptionText = "";
     private TextBlock? _activeCaptionTextBlock;
@@ -41,13 +41,21 @@ public partial class MainWindow : Window
     private bool _pendingStreamingSpeakerTurn;
     private int _streamingSpeakerIndex = 1;
     private bool _startNewCaptionParagraph = true;
+    private readonly List<SpeakerCluster> _speakerClusters = new();
+    private string _currentVoskSpeaker = "Speaker 1";
+    private DateTime _lastMissingSpeakerVectorWarningAt = DateTime.MinValue;
 
     public MainWindow()
     {
+        AppLogger.Initialize(ProjectRoot);
+        AppLogger.Info("MainWindow constructing.");
+        AppLogger.Memory("Startup");
         InitializeComponent();
         _whisperModelManager.MoveLegacyModelIfNeeded();
         SelectAvailableModel();
+        UpdateSettingsVisibility();
         UpdateModelStatus();
+        AppLogger.Info("MainWindow initialized.");
     }
 
     private async void StartButton_Click(object sender, RoutedEventArgs e)
@@ -59,9 +67,12 @@ public partial class MainWindow : Window
 
         try
         {
+            AppLogger.Info("Start requested.");
             _activeEngineKey = GetSelectedEngineKey();
             _activeLanguage = GetSelectedLanguage();
             var modelKey = GetSelectedModelKey();
+            AppLogger.Info($"Selected engine={_activeEngineKey}, language={_activeLanguage}, audioSource={GetSelectedAudioSourceName()}, whisperModel={modelKey}.");
+            AppLogger.Memory("Before start");
             if (IsVoskEngine(_activeEngineKey) && !_voskSpeechRecognition.HasModel(_activeLanguage))
             {
                 var modelPath = _voskSpeechRecognition.GetModelPath(_activeLanguage);
@@ -94,6 +105,8 @@ public partial class MainWindow : Window
             _pendingStreamingSpeakerTurn = false;
             _streamingSpeakerIndex = 1;
             _startNewCaptionParagraph = true;
+            _speakerClusters.Clear();
+            _currentVoskSpeaker = "Speaker 1";
             _activeAudioSourceName = GetSelectedAudioSourceName();
 
             if (IsWindowsSpeechEngine(_activeEngineKey))
@@ -102,7 +115,10 @@ public partial class MainWindow : Window
             }
             else if (IsVoskEngine(_activeEngineKey))
             {
-                StartVoskRecognition();
+                StartButton.IsEnabled = false;
+                StopButton.IsEnabled = false;
+                StatusText.Text = "Загружаю Vosk модель...";
+                await StartVoskRecognitionAsync();
             }
             else
             {
@@ -124,17 +140,21 @@ public partial class MainWindow : Window
             ChunkSecondsSlider.IsEnabled = false;
             AudioSourceComboBox.IsEnabled = false;
             LanguageComboBox.IsEnabled = false;
+            EngineComboBox.IsEnabled = false;
             ModelComboBox.IsEnabled = false;
             StatusText.Text = IsWindowsSpeechEngine(_activeEngineKey)
                 ? "Слушаю микрофон через Windows Speech Recognition."
                 : IsVoskEngine(_activeEngineKey)
-                ? "Слушаю микрофон через Vosk local."
+                ? $"Слушаю {_activeAudioSourceName.ToLowerInvariant()}."
                 : !_whisperModelManager.IsModelLoaded
                 ? $"Слушаю {_activeAudioSourceName.ToLowerInvariant()}. Скачайте модель Whisper, чтобы получить текст."
                 : $"Слушаю {_activeAudioSourceName.ToLowerInvariant()} и распознаю речь.";
+            AppLogger.Memory("After start");
+            AppLogger.Info("Start completed.");
         }
         catch (Exception ex)
         {
+            AppLogger.Error("Start failed.", ex);
             StopListening();
             MessageBox.Show(ex.Message, "LiveCaptioner", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
@@ -142,8 +162,10 @@ public partial class MainWindow : Window
 
     private void StopButton_Click(object sender, RoutedEventArgs e)
     {
+        AppLogger.Info("Stop requested.");
         StopListening();
         StatusText.Text = "Остановлено.";
+        AppLogger.Memory("After stop");
     }
 
     private void ClearButton_Click(object sender, RoutedEventArgs e)
@@ -160,6 +182,8 @@ public partial class MainWindow : Window
         _pendingStreamingSpeakerTurn = false;
         _streamingSpeakerIndex = 1;
         _startNewCaptionParagraph = true;
+        _speakerClusters.Clear();
+        _currentVoskSpeaker = "Speaker 1";
         StatusText.Text = "Текст очищен.";
     }
 
@@ -249,11 +273,34 @@ public partial class MainWindow : Window
 
         _activeEngineKey = GetSelectedEngineKey();
         _recognitionPrompt = "";
+        UpdateSettingsVisibility();
+        UpdateModelStatus();
         StatusText.Text = $"Движок переключен: {EngineComboBox.Text}";
+    }
+
+    private void LanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsInitialized || _isRunning)
+        {
+            return;
+        }
+
+        UpdateModelStatus();
+    }
+
+    private void AudioSourceComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsInitialized || _isRunning)
+        {
+            return;
+        }
+
+        UpdateSettingsVisibility();
     }
 
     protected override void OnClosed(EventArgs e)
     {
+        AppLogger.Info("Application closing.");
         StopListening();
         _whisperModelManager.Dispose();
         _voskSpeechRecognition.Dispose();
@@ -312,22 +359,24 @@ public partial class MainWindow : Window
         });
     }
 
-    private void StartVoskRecognition()
+    private async Task StartVoskRecognitionAsync()
     {
+        AppLogger.Info("Preparing Vosk recognition.");
         _voskSpeechRecognition.AudioLevelChanged += OnVoskAudioLevelChanged;
         _voskSpeechRecognition.PartialTextRecognized += OnVoskPartialTextRecognized;
         _voskSpeechRecognition.TextRecognized += OnVoskTextRecognized;
-        _voskSpeechRecognition.Start(
-            _activeLanguage,
-            GetSelectedVoskAudioSource(),
-            new VoskRecognitionOptions(
-                VoskPartialResultsCheckBox.IsChecked == true,
-                VoskInterviewVocabularyCheckBox.IsChecked == true,
-                VoskSystemAudioGainSlider.Value,
-                VoskSystemNoiseGateCheckBox.IsChecked == true));
-        _activeAudioSourceName = GetSelectedVoskAudioSource() == VoskAudioSource.SystemAudio
+        var audioSource = GetSelectedVoskAudioSource();
+        var options = new VoskRecognitionOptions(
+            VoskPartialResultsCheckBox.IsChecked == true,
+            VoskInterviewVocabularyCheckBox.IsChecked == true,
+            VoskSystemAudioGainSlider.Value,
+            VoskSystemNoiseGateCheckBox.IsChecked == true);
+        _activeAudioSourceName = audioSource == VoskAudioSource.SystemAudio
             ? "Системный звук Windows / Vosk"
             : "Микрофон / Vosk";
+        AppLogger.Info($"Starting Vosk: language={_activeLanguage}, audioSource={audioSource}, partial={options.EnablePartialResults}, vocabulary={options.UseInterviewVocabulary}, gain={options.SystemAudioGain:0.00}, noiseGate={options.SystemAudioNoiseGate}.");
+        await Task.Run(() => _voskSpeechRecognition.Start(_activeLanguage, audioSource, options));
+        AppLogger.Info("Vosk recognition started.");
     }
 
     private void OnVoskAudioLevelChanged(object? sender, double level)
@@ -342,9 +391,30 @@ public partial class MainWindow : Window
         });
     }
 
-    private void OnVoskTextRecognized(object? sender, string text)
+    private void OnVoskTextRecognized(object? sender, VoskRecognitionResult result)
     {
-        Dispatcher.Invoke(() => CommitStreamingCaptionLine(GetVoskCaptionSpeaker(), text));
+        AppLogger.Info($"Vosk final text length={result.Text.Length}, speakerVector={(result.SpeakerVector == null ? "none" : result.SpeakerVector.Length)}.");
+        Dispatcher.Invoke(() =>
+        {
+            var previousSpeaker = _currentVoskSpeaker;
+            var speakerResolvedByVector = VoskSpeakerVectorsCheckBox.IsChecked == true &&
+                                          result.SpeakerVector is { Length: > 0 };
+            var speaker = ResolveVoskSpeaker(result.SpeakerVector);
+
+            if (speakerResolvedByVector)
+            {
+                _pendingStreamingSpeakerTurn = false;
+                _currentVoskSpeaker = speaker;
+                if (!string.Equals(previousSpeaker, speaker, StringComparison.Ordinal))
+                {
+                    _streamingCaptionPrefix = "";
+                    _activeCaptionTextBlock = null;
+                    _startNewCaptionParagraph = true;
+                }
+            }
+
+            CommitStreamingCaptionLine(speaker, result.Text, speakerResolvedByVector);
+        });
     }
 
     private void OnVoskPartialTextRecognized(object? sender, string text)
@@ -426,6 +496,30 @@ public partial class MainWindow : Window
             return;
         }
 
+        var engineKey = GetSelectedEngineKey();
+        if (IsVoskEngine(engineKey))
+        {
+            var language = GetSelectedLanguage();
+            var voskModelPath = _voskSpeechRecognition.GetModelPath(language);
+            var hasVoskModel = _voskSpeechRecognition.HasModel(language);
+            ModelStatusText.Text = hasVoskModel
+                ? $"Vosk модель готова: {voskModelPath}"
+                : $"Vosk модель не найдена: {voskModelPath}";
+            var speakerModelText = _voskSpeechRecognition.HasSpeakerModel()
+                ? "Speaker model: vosk-model-spk-0.4 включена"
+                : "Speaker model не найдена: роли только по паузам";
+            VoskModelStatusText.Text = hasVoskModel
+                ? $"Используется: {Path.GetFileName(voskModelPath)}\n{speakerModelText}"
+                : $"Для языка {language} нужна папка: {voskModelPath}\n{speakerModelText}";
+            return;
+        }
+
+        if (IsWindowsSpeechEngine(engineKey))
+        {
+            ModelStatusText.Text = "Windows Speech Recognition: внешняя модель не нужна";
+            return;
+        }
+
         var modelKey = GetSelectedModelKey();
         var modelPath = _whisperModelManager.GetModelPath(modelKey);
         var hasModel = _whisperModelManager.HasModel(modelKey);
@@ -434,6 +528,37 @@ public partial class MainWindow : Window
             : $"Модель Whisper не найдена: {modelPath}";
         DownloadModelButton.Content = hasModel ? "Модель уже скачана" : $"Скачать {GetSelectedModelKey()}-модель";
         DownloadModelButton.IsEnabled = !hasModel;
+    }
+
+    private void UpdateSettingsVisibility()
+    {
+        if (!IsInitialized)
+        {
+            return;
+        }
+
+        var engineKey = GetSelectedEngineKey();
+        var isVosk = IsVoskEngine(engineKey);
+        var isWhisper = IsWhisperEngine(engineKey);
+        var isWindowsSpeech = IsWindowsSpeechEngine(engineKey);
+        var isSystemAudio = AudioSourceComboBox.SelectedIndex == 1;
+
+        VoskSettingsPanel.Visibility = isVosk ? Visibility.Visible : Visibility.Collapsed;
+        WhisperSettingsPanel.Visibility = isWhisper ? Visibility.Visible : Visibility.Collapsed;
+        WindowsSpeechSettingsPanel.Visibility = isWindowsSpeech ? Visibility.Visible : Visibility.Collapsed;
+
+        VoskSystemAudioGainLabel.Visibility = isVosk && isSystemAudio ? Visibility.Visible : Visibility.Collapsed;
+        VoskSystemAudioGainSlider.Visibility = isVosk && isSystemAudio ? Visibility.Visible : Visibility.Collapsed;
+        VoskSystemAudioGainValueText.Visibility = isVosk && isSystemAudio ? Visibility.Visible : Visibility.Collapsed;
+        VoskSystemNoiseGateCheckBox.Visibility = isVosk && isSystemAudio ? Visibility.Visible : Visibility.Collapsed;
+        VoskAutoSpeakerTurnsCheckBox.Visibility = isVosk ? Visibility.Visible : Visibility.Collapsed;
+        VoskSpeakerVectorsCheckBox.Visibility = isVosk ? Visibility.Visible : Visibility.Collapsed;
+        VoskSpeakerVectorThresholdLabel.Visibility = isVosk ? Visibility.Visible : Visibility.Collapsed;
+        VoskSpeakerVectorThresholdSlider.Visibility = isVosk ? Visibility.Visible : Visibility.Collapsed;
+        VoskSpeakerVectorThresholdValueText.Visibility = isVosk ? Visibility.Visible : Visibility.Collapsed;
+        VoskSpeakerPauseLabel.Visibility = isVosk ? Visibility.Visible : Visibility.Collapsed;
+        VoskSpeakerPauseSlider.Visibility = isVosk ? Visibility.Visible : Visibility.Collapsed;
+        VoskSpeakerPauseValueText.Visibility = isVosk ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void SelectAvailableModel()
@@ -463,6 +588,7 @@ public partial class MainWindow : Window
         }
 
         _captionCancellation?.Cancel();
+        AppLogger.Info("Stopping audio/recognition services.");
         _audioCapture?.Dispose();
         _audioCapture = null;
         _windowsSpeechRecognition?.Dispose();
@@ -479,8 +605,10 @@ public partial class MainWindow : Window
         ChunkSecondsSlider.IsEnabled = true;
         AudioSourceComboBox.IsEnabled = true;
         LanguageComboBox.IsEnabled = true;
+        EngineComboBox.IsEnabled = true;
         ModelComboBox.IsEnabled = true;
         AudioLevelBar.Value = 0;
+        AppLogger.Info("Services stopped.");
     }
 
     private void TrackVoskSpeakerPause(double level)
@@ -500,7 +628,7 @@ public partial class MainWindow : Window
 
         if (_streamingSpeechActive &&
             _lastStreamingSpeechAt != DateTime.MinValue &&
-            now - _lastStreamingSpeechAt > StreamingSpeakerPause)
+            now - _lastStreamingSpeechAt > TimeSpan.FromSeconds(VoskSpeakerPauseSlider.Value))
         {
             _streamingSpeechActive = false;
             _pendingStreamingSpeakerTurn = !string.IsNullOrWhiteSpace(_streamingCaptionPrefix);
@@ -592,10 +720,14 @@ public partial class MainWindow : Window
         StatusText.Text = "Распознано.";
     }
 
-    private void UpdateStreamingCaptionLine(string speaker, string partialText)
+    private void UpdateStreamingCaptionLine(string speaker, string partialText, bool speakerLocked = false)
     {
-        ApplyPendingStreamingSpeakerTurn();
-        speaker = GetVoskCaptionSpeaker();
+        if (!speakerLocked)
+        {
+            ApplyPendingStreamingSpeakerTurn();
+            speaker = GetVoskCaptionSpeaker();
+        }
+
         var displayText = AppendCaptionText(_streamingCaptionPrefix, partialText);
         if (string.IsNullOrWhiteSpace(displayText))
         {
@@ -619,20 +751,28 @@ public partial class MainWindow : Window
         StatusText.Text = "Распознаю...";
     }
 
-    private void CommitStreamingCaptionLine(string speaker, string finalText)
+    private void CommitStreamingCaptionLine(string speaker, string finalText, bool speakerLocked = false)
     {
         if (string.IsNullOrWhiteSpace(finalText))
         {
             return;
         }
 
-        ApplyPendingStreamingSpeakerTurn();
-        speaker = GetVoskCaptionSpeaker();
+        if (!speakerLocked)
+        {
+            ApplyPendingStreamingSpeakerTurn();
+            speaker = GetVoskCaptionSpeaker();
+        }
+        else
+        {
+            _currentVoskSpeaker = speaker;
+        }
+
         var formattedText = VoskSentenceFormattingCheckBox.IsChecked == true
             ? FormatCaptionSentence(finalText)
             : finalText.Trim();
         _streamingCaptionPrefix = AppendCaptionText(_streamingCaptionPrefix, formattedText);
-        UpdateStreamingCaptionLine(speaker, "");
+        UpdateStreamingCaptionLine(speaker, "", speakerLocked);
         StatusText.Text = "Распознано.";
     }
 
@@ -648,23 +788,93 @@ public partial class MainWindow : Window
         _activeCaptionTextBlock = null;
         _startNewCaptionParagraph = true;
         _streamingSpeakerIndex = _streamingSpeakerIndex == 1 ? 2 : 1;
+        _currentVoskSpeaker = $"Speaker {_streamingSpeakerIndex}";
     }
 
     private bool ShouldAutoSplitVoskSpeakers()
     {
         return IsVoskEngine(_activeEngineKey) &&
-               GetSelectedVoskAudioSource() == VoskAudioSource.SystemAudio &&
-               VoskAutoSpeakerTurnsCheckBox.IsChecked == true;
+               (VoskAutoSpeakerTurnsCheckBox.IsChecked == true ||
+                VoskSpeakerVectorsCheckBox.IsChecked == true);
     }
 
     private string GetVoskCaptionSpeaker()
     {
         if (ShouldAutoSplitVoskSpeakers())
         {
-            return $"Speaker {_streamingSpeakerIndex}";
+            return _currentVoskSpeaker;
         }
 
         return _activeAudioSourceName;
+    }
+
+    private string ResolveVoskSpeaker(float[]? speakerVector)
+    {
+        if (VoskSpeakerVectorsCheckBox.IsChecked != true || speakerVector == null || speakerVector.Length == 0)
+        {
+            if (VoskSpeakerVectorsCheckBox.IsChecked == true &&
+                DateTime.Now - _lastMissingSpeakerVectorWarningAt > TimeSpan.FromSeconds(10))
+            {
+                _lastMissingSpeakerVectorWarningAt = DateTime.Now;
+                AppLogger.Warn("Vosk final result has no speaker vector. Check that Models\\vosk-model-spk-0.4 is loaded and compatible.");
+                StatusText.Text = "Vosk не прислал voice-vector; роли пока делятся только по паузам.";
+            }
+
+            return GetVoskCaptionSpeaker();
+        }
+
+        var matchThreshold = VoskSpeakerVectorThresholdSlider.Value;
+        var bestIndex = -1;
+        var bestScore = double.NegativeInfinity;
+
+        for (var i = 0; i < _speakerClusters.Count; i++)
+        {
+            var score = CosineSimilarity(_speakerClusters[i].Centroid, speakerVector);
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestIndex = i;
+            }
+        }
+
+        if (bestIndex >= 0 && bestScore >= matchThreshold)
+        {
+            _speakerClusters[bestIndex].Update(speakerVector);
+            AppLogger.Info($"Speaker vector matched {_speakerClusters[bestIndex].Name}, score={bestScore:0.000}.");
+            return _speakerClusters[bestIndex].Name;
+        }
+
+        var speakerName = $"Speaker {_speakerClusters.Count + 1}";
+        _speakerClusters.Add(new SpeakerCluster(speakerName, speakerVector));
+        AppLogger.Info($"Speaker vector created {speakerName}, bestScore={(double.IsNegativeInfinity(bestScore) ? "none" : bestScore.ToString("0.000"))}.");
+        return speakerName;
+    }
+
+    private static double CosineSimilarity(float[] first, float[] second)
+    {
+        var length = Math.Min(first.Length, second.Length);
+        if (length == 0)
+        {
+            return 0;
+        }
+
+        double dot = 0;
+        double firstNorm = 0;
+        double secondNorm = 0;
+
+        for (var i = 0; i < length; i++)
+        {
+            dot += first[i] * second[i];
+            firstNorm += first[i] * first[i];
+            secondNorm += second[i] * second[i];
+        }
+
+        if (firstNorm <= 0 || secondNorm <= 0)
+        {
+            return 0;
+        }
+
+        return dot / (Math.Sqrt(firstNorm) * Math.Sqrt(secondNorm));
     }
 
     private TextBlock CreateCaptionParagraph(string speaker, string text)
@@ -822,6 +1032,31 @@ public partial class MainWindow : Window
         return normalized.EndsWith('.') || normalized.EndsWith('?') || normalized.EndsWith('!')
             ? normalized
             : normalized + ".";
+    }
+}
+
+public sealed class SpeakerCluster
+{
+    public string Name { get; }
+    public float[] Centroid { get; private set; }
+    private int _sampleCount;
+
+    public SpeakerCluster(string name, float[] vector)
+    {
+        Name = name;
+        Centroid = (float[])vector.Clone();
+        _sampleCount = 1;
+    }
+
+    public void Update(float[] vector)
+    {
+        var length = Math.Min(Centroid.Length, vector.Length);
+        for (var i = 0; i < length; i++)
+        {
+            Centroid[i] = (Centroid[i] * _sampleCount + vector[i]) / (_sampleCount + 1);
+        }
+
+        _sampleCount++;
     }
 }
 

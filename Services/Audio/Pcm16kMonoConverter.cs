@@ -24,7 +24,9 @@ public sealed class Pcm16kMonoConverter
         AppendMonoSamples(buffer, bytesRecorded);
 
         var ratio = (double)_sourceFormat.SampleRate / TargetSampleRate;
-        var output = new List<byte>();
+        var estimatedSamples = Math.Max(0, (int)((_sourceSamples.Count - _sourcePosition - 1) / ratio) + 1);
+        var output = new byte[estimatedSamples * 2];
+        var outputOffset = 0;
 
         while (_sourcePosition + 1 < _sourceSamples.Count)
         {
@@ -39,8 +41,13 @@ public sealed class Pcm16kMonoConverter
 
             sample = Math.Clamp(sample * _gain, -1.0, 1.0);
             var pcm = (short)(sample * short.MaxValue);
-            output.Add((byte)(pcm & 0xff));
-            output.Add((byte)((pcm >> 8) & 0xff));
+            if (outputOffset + 2 > output.Length)
+            {
+                Array.Resize(ref output, output.Length + 512);
+            }
+
+            output[outputOffset++] = (byte)(pcm & 0xff);
+            output[outputOffset++] = (byte)((pcm >> 8) & 0xff);
 
             _sourcePosition += ratio;
         }
@@ -52,7 +59,13 @@ public sealed class Pcm16kMonoConverter
             _sourcePosition -= consumed;
         }
 
-        return output.ToArray();
+        if (outputOffset == output.Length)
+        {
+            return output;
+        }
+
+        Array.Resize(ref output, outputOffset);
+        return output;
     }
 
     private void AppendMonoSamples(byte[] buffer, int bytesRecorded)

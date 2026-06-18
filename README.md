@@ -1,78 +1,96 @@
 # LiveCaptioner
 
-Desktop WPF application for live captions from a microphone or Windows system audio.
+Desktop WPF application for local live captions from a microphone or Windows system audio.
 
-The app is intended for meetings, browser audio, YouTube, players, and interview practice. Recognition runs locally.
+The current practical target is podcast, meeting, browser, YouTube, and player audio. The project is focused on low-latency local recognition, with Vosk as the preferred engine right now.
 
-## Current Features
+## Current Situation
 
+Current project path on the source machine:
+
+```text
+C:\Projects\LiveCaptioner
+```
+
+Current status:
+
+- The app starts and builds.
+- Vosk local recognition is the main workflow.
+- Microphone and Windows system audio are supported.
+- Russian and English Vosk models are present on the source machine.
+- Vosk speaker-vector model has been added and wired into the app.
+- Speaker split currently works through:
+  - voice vectors from `vosk-model-spk-0.4`, when Vosk returns the `spk` vector;
+  - pause-based fallback when no speaker vector is available.
+- Speaker separation is experimental. It is not production-grade diarization.
+- Logs are written both to a console window and to `Logs`.
+- Large model folders and generated logs are ignored by git.
+
+Last verified build command:
+
+```powershell
+dotnet build C:\Projects\LiveCaptioner\LiveCaptioner.csproj -p:OutputPath=C:\Users\User\Documents\Codex\2026-06-14\c-projects-test-screenocr\work\LiveCaptionerBuild\
+```
+
+Last result:
+
+```text
+Build succeeded.
+0 warnings.
+0 errors.
+```
+
+The alternate output path is useful when Visual Studio is running and locks normal `bin` output files.
+
+## Features
+
+- WPF desktop UI on .NET 8.
 - Microphone capture.
 - Windows system audio capture through WASAPI loopback.
 - Live audio level indicator.
-- Local Whisper recognition through Whisper.net.
 - Local Vosk recognition.
-- Switchable recognition engines:
-  - `Whisper balanced`
-  - `Whisper fast / raw`
-  - `Windows Speech Recognition`
-  - `Vosk local`
-- Whisper model selector:
-  - `base`
-  - `small`
-- Vosk support for original model folder names, for example `vosk-model-en-us-0.22`.
-- Vosk fast partial text while speech is still in progress.
-- Vosk interview vocabulary mode for common interview/domain words.
-- Vosk system audio gain control.
-- Vosk system noise gate.
+- Local Whisper recognition through Whisper.net.
+- Windows Speech Recognition fallback.
+- Context-sensitive settings for each engine.
+- Vosk partial live text.
+- Vosk system audio gain.
+- Vosk system audio noise gate.
 - Vosk sentence formatting.
-- Basic Vosk speaker-turn split by pauses for system audio.
+- Vosk pause-based speaker turns.
+- Vosk voice-vector speaker clustering with configurable similarity threshold.
 - Always-on-top window.
 - Save transcript to `.txt`.
+- Runtime logging to console and log file.
 
-## Requirements
+## Recognition Engines
 
-- Windows.
-- .NET 8 SDK.
-- Visual Studio 2022 or `dotnet` CLI.
-- For Whisper: local GGML Whisper model files in `Models`.
-- For Vosk: local Vosk model folders in `Models`.
+### Vosk local
 
-No Python runtime, HuggingFace token, or external speaker-diarization service is required in the current version.
+Current preferred mode.
 
-## NuGet Packages
+It gives the best responsiveness for live captions. The service converts incoming audio to `16 kHz mono PCM`, queues small PCM chunks, and feeds them to `VoskRecognizer` on a worker task so audio callbacks do not freeze the UI.
 
-The project uses these NuGet packages:
+Vosk can use:
 
-- `NAudio` `2.3.0`
-  - Audio capture, microphone input, WASAPI loopback, audio format handling.
-- `Whisper.net` `1.9.1`
-  - Local Whisper inference.
-- `Whisper.net.Runtime` `1.9.1`
-  - Native runtime for Whisper.net.
-- `Vosk` `0.3.38`
-  - Local Vosk speech recognition.
-- `System.Speech` `10.0.9`
-  - Windows Speech Recognition engine.
+- microphone input;
+- Windows system audio;
+- partial live text;
+- optional interview vocabulary;
+- optional speaker-vector model.
 
-Restore packages with:
+### Whisper balanced
 
-```powershell
-dotnet restore C:\Projects\LiveCaptioner\LiveCaptioner.csproj
-```
+Uses local Whisper with more context from previous text. Better stability, higher latency.
 
-Build with:
+### Whisper fast / raw
 
-```powershell
-dotnet build C:\Projects\LiveCaptioner\LiveCaptioner.csproj
-```
+Uses local Whisper with less context. Lower latency than balanced mode, but less stable.
 
-Run with:
+### Windows Speech Recognition
 
-```powershell
-dotnet run --project C:\Projects\LiveCaptioner\LiveCaptioner.csproj
-```
+Uses the built-in Windows recognizer. No external model file is needed, but quality is usually weaker for podcasts and system audio.
 
-## Model Files
+## Models
 
 Models are stored in:
 
@@ -80,117 +98,223 @@ Models are stored in:
 C:\Projects\LiveCaptioner\Models
 ```
 
-The model files are intentionally not part of the project source because they can be large.
+This directory is intentionally ignored by git.
 
-### Whisper Models
+Known model folders/files on the source machine:
 
-Expected Whisper files:
+```text
+ggml-base.bin
+vosk-model-en-us-0.22
+vosk-model-en-us-0.42-gigaspeech
+vosk-model-ru-0.10
+vosk-model-spk-0.4
+```
+
+Vosk model selection accepts original Vosk folder names. For example:
+
+```text
+vosk-model-en-us-0.22
+vosk-model-en-us-0.42-gigaspeech
+vosk-model-ru-0.10
+```
+
+The speaker model path expected by the app:
+
+```text
+C:\Projects\LiveCaptioner\Models\vosk-model-spk-0.4
+```
+
+Vosk models can be downloaded from:
+
+```text
+https://alphacephei.com/vosk/models
+```
+
+Whisper expected files:
 
 ```text
 C:\Projects\LiveCaptioner\Models\ggml-base.bin
 C:\Projects\LiveCaptioner\Models\ggml-small.bin
 ```
 
-The app can download the selected Whisper model from the UI if it is missing.
+The app can download missing Whisper models from the UI.
 
-Recommended first choice:
+## Recommended Vosk Settings
 
-- `base` - faster, good for interactive testing.
+For Russian podcast/audio:
 
-Use `small` when accuracy matters more than latency.
-
-### Vosk Models
-
-Expected Vosk folders:
-
-```text
-C:\Projects\LiveCaptioner\Models\vosk-model-en
-C:\Projects\LiveCaptioner\Models\vosk-model-ru
-C:\Projects\LiveCaptioner\Models\vosk-model-uk
-```
-
-The app also accepts original Vosk folder names. For English, this works:
-
-```text
-C:\Projects\LiveCaptioner\Models\vosk-model-en-us-0.22
-```
-
-Recommended English model for better quality:
-
-```text
-vosk-model-en-us-0.22
-```
-
-Smaller and faster alternative:
-
-```text
-vosk-model-small-en-us-0.15
-```
-
-Download Vosk models from:
-
-```text
-https://alphacephei.com/vosk/models
-```
-
-## Recommended Settings
-
-For system audio with Vosk:
-
-- `Source`: `Windows system audio`
-- `Language`: `en`
+- `Source`: `Microphone` or `Windows system audio`
+- `Language`: `ru`
 - `Recognition engine`: `Vosk local`
-- `Vosk fast live text`: enabled
-- `Vosk interview vocabulary`: enabled for interview/domain practice
-- `Vosk system audio gain`: start with `1.60x`
-- `Vosk system noise gate`: enabled
-- `Vosk auto speaker turns`: optional
-- `Vosk sentence formatting`: enabled
+- `Fast live text`: enabled
+- `Sentence formatting`: enabled
+- `Split roles by pauses`: enabled if no reliable speaker vectors are available
+- `Distinguish roles by voice`: enabled when `vosk-model-spk-0.4` is present
+- `Voice similarity threshold`: start around `0.82`
 
-For microphone with Vosk:
+Speaker threshold tuning:
 
-- `Source`: `Microphone`
-- `Language`: `en`
-- `Recognition engine`: `Vosk local`
-- `Vosk fast live text`: enabled
-- `Vosk sentence formatting`: enabled
+- If different speakers are merged into `Speaker 1`, raise the threshold, for example `0.86` to `0.90`.
+- If one real speaker is split into many speakers, lower the threshold, for example `0.75` to `0.80`.
 
-For Whisper:
+For Windows system audio:
 
-- `Recognition engine`: `Whisper balanced`
-- `Model`: `base` for speed, `small` for higher accuracy.
-- `Audio chunk length`: `3 sec` is a reasonable starting point.
+- Start with gain around `1.60x`.
+- Keep the noise gate enabled if background noise causes false recognition.
+- Make sure the audio is playing through the default Windows output device.
 
-## Recognition Engines
+## Speaker Separation
 
-### Whisper balanced
+The current speaker separation is heuristic.
 
-Uses local Whisper with context from previous recognized text. It is usually more stable than raw mode but has more latency.
+There are two mechanisms:
 
-### Whisper fast / raw
+- Voice-vector clustering from Vosk `spk` vectors.
+- Pause-based speaker turns as a fallback.
 
-Uses local Whisper with less context. It can be faster but may be less stable.
+Important limitations:
 
-### Windows Speech Recognition
+- Vosk does not do full diarization by itself.
+- The app clusters `spk` vectors locally using cosine similarity.
+- If Vosk does not return an `spk` vector in final JSON results, the app cannot separate by voice and will log that fact.
+- Podcast audio with music, compression, overlapping voices, or very short turns can still be difficult.
 
-Uses the Windows built-in recognizer. It is available without extra model files, but quality may be poor for interview/system-audio scenarios.
+Useful log messages:
 
-### Vosk local
+```text
+Vosk speaker model enabled.
+Vosk final text length=..., speakerVector=...
+Speaker vector matched Speaker N, score=...
+Speaker vector created Speaker N, bestScore=...
+Vosk speaker model is enabled but final result has no spk vector.
+```
 
-Uses local Vosk models. This is currently the most useful mode for responsive system-audio captions.
+## Logs
 
-## Speaker Turns
+Logs are written to:
 
-The app currently has only a simple pause-based speaker-turn mode for Vosk system audio.
+```text
+C:\Projects\LiveCaptioner\Logs
+```
 
-This is not real speaker diarization. It cannot reliably identify people by voice. It only starts a new speaker block after a detected pause and alternates `Speaker 1` / `Speaker 2`.
+The app also opens a console window and writes runtime diagnostics there.
 
-Real speaker diarization was intentionally not kept in the app because the tested options introduced unwanted delays or external setup requirements.
+Logs include:
+
+- app startup and shutdown;
+- selected engine, language, source, model;
+- Vosk model load;
+- Vosk speaker model load;
+- memory checkpoints;
+- PCM queue backlog warnings;
+- recognition errors;
+- speaker-vector diagnostics.
+
+## Git Ignore
+
+The project ignores local models and generated logs:
+
+```text
+/Models/
+/Logs/
+*.ggml
+ggml-*.bin
+vosk-model*/
+```
+
+Do not commit model folders or log files.
+
+## Build And Run
+
+Restore:
+
+```powershell
+dotnet restore C:\Projects\LiveCaptioner\LiveCaptioner.csproj
+```
+
+Build:
+
+```powershell
+dotnet build C:\Projects\LiveCaptioner\LiveCaptioner.csproj
+```
+
+Build to alternate output when Visual Studio locks `bin`:
+
+```powershell
+dotnet build C:\Projects\LiveCaptioner\LiveCaptioner.csproj -p:OutputPath=C:\Users\User\Documents\Codex\LiveCaptionerBuild\
+```
+
+Run:
+
+```powershell
+dotnet run --project C:\Projects\LiveCaptioner\LiveCaptioner.csproj
+```
+
+## Agent Handoff Context
+
+Use this section when continuing the work on another computer or in another agent session.
+
+Project intent:
+
+- Build a local desktop live caption app similar in spirit to Windows captions, Zoom captions, or Teams captions.
+- The user wants practical captions for podcasts, meetings, YouTube, browser audio, and interviews.
+- Keep the workflow local where possible.
+- Avoid external services, tokens, Python pipelines, or cloud APIs unless the user explicitly asks.
+- Low latency and usable text are more important than academic-perfect transcription.
+
+Important current files:
+
+```text
+MainWindow.xaml
+MainWindow.xaml.cs
+Services\Audio\Pcm16kMonoConverter.cs
+Services\Diagnostics\AppLogger.cs
+Services\Speech\VoskSpeechRecognitionService.cs
+Services\Speech\VoskRecognitionResult.cs
+Services\Speech\VoskRecognitionOptions.cs
+Services\Speech\VoskAudioSource.cs
+Services\Speech\WhisperModelManager.cs
+Services\Speech\WindowsSpeechRecognitionService.cs
+```
+
+Important implementation notes:
+
+- `MainWindow.xaml.cs` still orchestrates most UI and engine switching.
+- `VoskSpeechRecognitionService` loads the Vosk model and optional speaker model.
+- Vosk final recognition emits `VoskRecognitionResult`, which contains text and optional `SpeakerVector`.
+- Speaker clustering is currently in `MainWindow.xaml.cs`.
+- The speaker clustering threshold is controlled by `VoskSpeakerVectorThresholdSlider`.
+- Partial text updates the current caption block.
+- Final text commits into the active caption block.
+- When voice-vector speaker changes, the UI starts a new caption paragraph.
+- Pause-based speaker turns are still used as fallback.
+
+Known rough edges:
+
+- Speaker diarization is approximate.
+- Vosk speaker vectors may not always be emitted.
+- UI text has Russian labels; preserve UTF-8 when editing.
+- `LiveCaptioner.slnx` may be untracked depending on the machine.
+- Visual Studio may lock build outputs while the app is running.
+
+Do not reintroduce unless explicitly requested:
+
+- Pyannote/HuggingFace diarization.
+- Python-based delayed diarization pipeline.
+- External cloud recognition.
+
+Good next steps:
+
+- Improve speaker clustering diagnostics in the UI.
+- Add a compact speaker debug panel showing vector/match score.
+- Add named speakers and manual speaker correction.
+- Add transcript export with timestamps and speaker labels.
+- Move speaker clustering out of `MainWindow.xaml.cs` into a service.
+- Add presets for podcast, meeting, YouTube, and interview.
 
 ## Notes
 
 - System audio capture depends on the default Windows playback device.
-- For browser/meeting audio, make sure the sound is actually playing through the selected Windows output device.
-- Vosk system audio is converted internally to `16 kHz mono PCM`.
-- Whisper receives WAV chunks and therefore normally has higher latency.
-- Model files and generated work files should not be committed to source control.
+- Vosk system audio and microphone audio are converted internally to `16 kHz mono PCM`.
+- Whisper uses WAV chunks and normally has higher latency.
+- When testing speaker separation, use clear alternating speakers and at least a few seconds of speech per speaker.

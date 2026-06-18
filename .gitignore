@@ -372,3 +372,10 @@ FodyWeavers.xsd
 idea/
 
 .DS_Store
+
+# Local speech models and generated logs
+/Models/
+/Logs/
+*.ggml
+ggml-*.bin
+vosk-model*/
