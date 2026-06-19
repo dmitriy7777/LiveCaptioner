@@ -20,7 +20,9 @@ Primary goal:
 
 - Fast, readable live captions for meetings/interviews/browser/system audio.
 - User prefers low latency over perfect recognition.
-- Current best mode is `Vosk local` with system audio.
+- Current best cloud mode is `OpenAI cloud - fast` with Windows system audio and language `en`.
+- Current best local/offline mode is `Vosk local` with system audio.
+- `OpenAI cloud - fast` uses OpenAI Realtime WebSocket transcription and is much lower latency than chunked OpenAI transcription.
 
 ## Current Build State
 
@@ -45,6 +47,9 @@ From `LiveCaptioner.csproj`:
 - `Vosk` `0.3.38`
 - `Whisper.net` `1.9.1`
 - `Whisper.net.Runtime` `1.9.1`
+
+No OpenAI SDK package is used. OpenAI chunked transcription is implemented with `HttpClient`; OpenAI realtime transcription is implemented with `ClientWebSocket`.
+No Sherpa-ONNX NuGet package was available as `SherpaOnnx`.
 
 ## Current Models
 
@@ -107,12 +112,29 @@ Implemented and kept:
   - system audio gain
   - system audio noise gate
   - sentence formatting
-  - simple pause-based speaker turns
+  - speaker split by Vosk `spk` voice vectors when `vosk-model-spk-0.4` is available
+  - optional new paragraph after long silence, without changing the speaker label
 - Windows Speech Recognition engine.
+- OpenAI cloud engine:
+  - `OpenAI cloud - fast`: realtime WebSocket session using `gpt-realtime-2` with input transcription model `gpt-realtime-whisper`
+  - `OpenAI diarize - slower`: chunked `gpt-4o-transcribe-diarize`
+  - optional experimental local speaker split in realtime mode through pitch/timbre voiceprints
+  - requires `OPENAI_API_KEY`
+- Sherpa-ONNX engine is selectable but currently waits for a native/helper bridge at `Tools\sherpa-onnx\sherpa-onnx.exe`.
 - Always-on-top checkbox.
 - Save transcript to `.txt`.
 
 ## Important Current UI Settings
+
+Recommended OpenAI realtime system-audio test settings:
+
+- `Profile`: `Podcast / Video`
+- `Source`: `Windows system audio`
+- `Language`: `en`
+- `Recognition engine`: `OpenAI cloud - fast`
+- `Split speakers locally by voice`: enabled only when testing experimental speaker split
+- Use `OpenAI cloud - fast` for low-latency English monologues and videos.
+- Use `OpenAI diarize - slower` only when official chunked speaker labels are more important than latency.
 
 Recommended Vosk system-audio test settings:
 
@@ -123,7 +145,8 @@ Recommended Vosk system-audio test settings:
 - `Vosk interview vocabulary`: enabled
 - `Vosk system audio gain`: start around `1.60x`
 - `Vosk system noise gate`: enabled
-- `Vosk auto speaker turns`: optional
+- `Split speakers by voice`: enabled when the Vosk speaker model is available
+- `New paragraph after long silence`: optional; do not use pauses to invent speakers
 - `Vosk sentence formatting`: enabled
 
 Recommended Whisper test settings:
@@ -141,7 +164,14 @@ Current service structure:
 - `Services/Audio/SystemAudioCapture.cs`
 - `Services/Audio/AudioMath.cs`
 - `Services/Audio/Pcm16kMonoConverter.cs`
+- `Services/Audio/PcmMonoConverter.cs`
+- `Services/Audio/RealtimePcmAudioCapture.cs`
 - `Services/Speech/WhisperModelManager.cs`
+- `Services/Speech/LocalSpeakerDiarizer.cs`
+- `Services/Speech/OpenAIRealtimeTranscriptionService.cs`
+- `Services/Speech/OpenAITranscriptionService.cs`
+- `Services/Speech/OpenAITranscriptionResult.cs`
+- `Services/Speech/SherpaOnnxSpeechRecognitionService.cs`
 - `Services/Speech/WindowsSpeechRecognitionService.cs`
 - `Services/Speech/VoskSpeechRecognitionService.cs`
 - `Services/Speech/VoskRecognitionOptions.cs`
@@ -173,7 +203,50 @@ Current Vosk caption behavior:
 - Partial Vosk text updates the active line.
 - Final Vosk text is appended to the active paragraph.
 - Sentence formatting capitalizes and adds basic punctuation.
-- Pause-based speaker turns can create a new block and alternate `Speaker 1` / `Speaker 2`.
+- Pause-based speaker changes were removed. Long silence can optionally start a new paragraph, but never changes `Speaker N`.
+
+## OpenAI Implementation Notes
+
+`OpenAIRealtimeTranscriptionService`:
+
+- Used by `OpenAI cloud - fast`.
+- Opens `wss://api.openai.com/v1/realtime?model=gpt-realtime-2`.
+- Sends `session.update` with:
+  - `session.type = realtime`
+  - `session.output_modalities = ["text"]`
+  - `audio.input.format = { type = audio/pcm, rate = 24000 }`
+  - `audio.input.transcription.model = gpt-realtime-whisper`
+  - language from the UI, usually `en`
+- Accepts `conversation.item.input_audio_transcription.delta` and `conversation.item.input_audio_transcription.completed`.
+- `RealtimePcmAudioCapture` sends `24 kHz mono PCM16` chunks from microphone or WASAPI loopback system audio.
+- This mode is the current preferred OpenAI mode for low-latency captions.
+
+`LocalSpeakerDiarizer`:
+
+- Used only by OpenAI realtime when `Split speakers locally by voice` is enabled.
+- It is experimental and local; OpenAI realtime is not returning speaker labels here.
+- It estimates voiceprints from pitch, zero-crossing rate, voice-band energies, and spectral tilt/band-ratio features.
+- It avoids pause-based speaker switching.
+- It requires stable voiceprint evidence before creating or switching speakers.
+- It can distinguish male/female voices better than similar male/male voices.
+- When a late speaker switch is confirmed, `MainWindow.xaml.cs` trims the old active partial caption and moves current partial text to the new speaker block.
+
+`OpenAITranscriptionService`:
+
+- Uses `HttpClient`.
+- Reads `OPENAI_API_KEY` from the environment.
+- Calls `https://api.openai.com/v1/audio/transcriptions`.
+- Uses `response_format=json` for `gpt-4o-mini-transcribe` if chunked non-diarized fallback is used.
+- Uses `response_format=diarized_json` and `chunking_strategy=auto` for `gpt-4o-transcribe-diarize`.
+- `OpenAI diarize - slower` is chunk-based, so speaker IDs may not stay perfectly stable across chunks and latency is higher.
+
+## Sherpa-ONNX Implementation Notes
+
+`SherpaOnnxSpeechRecognitionService` is a boundary/stub.
+
+- Expected runtime bridge: `Tools\sherpa-onnx\sherpa-onnx.exe`.
+- Do not fake recognition through Vosk here.
+- Next useful step is adding a native/C# bridge or helper process based on official sherpa-onnx C#/C++ examples and local ONNX models.
 
 Important limitation:
 
@@ -189,11 +262,11 @@ These were intentionally removed:
   - Introduced unwanted delay.
   - User explicitly rejected this direction.
 - `Local voice heuristic`
-  - Tried rough speaker separation by local pitch/timbre features.
-  - Not useful enough.
-  - User asked to roll it back.
+  - Earlier rough pitch/timbre attempt was not useful enough.
+  - Current version has been reintroduced as `LocalSpeakerDiarizer` for OpenAI realtime and is still experimental.
+  - Do not replace the realtime transcription path with slow chunked diarization unless the user explicitly accepts the latency tradeoff.
 
-Do not reintroduce these unless the user explicitly asks.
+Do not reintroduce Pyannote/Python delayed diarization unless the user explicitly asks.
 
 ## Current README
 
@@ -214,16 +287,17 @@ It includes:
 - Russian conversation is fine.
 - The app is for practical interview/meeting support.
 - User prefers low latency and usable text over perfect academic diarization.
-- Avoid external services/tokens/APIs for core workflow.
-- Keep the app local where possible.
-- Do not pursue speaker diarization if it adds large delays or setup complexity.
+- OpenAI API is now an accepted workflow for cloud mode, but local/offline options should remain.
+- Keep the app local where possible, but do not remove the working OpenAI realtime path.
+- Avoid speaker diarization approaches that add large delays or setup complexity.
 
 ## Good Next Steps
 
 Potential improvements that fit the current direction:
 
 - Improve Vosk sentence formatting.
-- Add configurable pause threshold for `Vosk auto speaker turns`.
+- Add speaker-vector diagnostics: last `spk` availability, best match score, selected speaker.
+- Add manual speaker names/correction.
 - Add a clear transcript export format.
 - Add user-editable interview vocabulary file.
 - Add profiles/presets for:

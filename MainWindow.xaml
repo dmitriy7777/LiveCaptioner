@@ -25,7 +25,7 @@
 
                 <StackPanel>
                     <TextBlock Text="LiveCaptioner" Foreground="#f4f7fb" FontSize="26" FontWeight="SemiBold"/>
-                    <TextBlock Text="Живые субтитры для микрофона или системного звука: митинги, браузер, YouTube, плееры"
+                    <TextBlock Text="Live captions for microphone or system audio: meetings, browser, YouTube, players"
                                Foreground="#9aa7bd"
                                FontSize="13"
                                Margin="0,4,0,0"/>
@@ -33,7 +33,7 @@
 
                 <CheckBox Grid.Column="1"
                           x:Name="AlwaysOnTopCheckBox"
-                          Content="Поверх окон"
+                          Content="Always on top"
                           Foreground="#dce5f3"
                           VerticalAlignment="Center"
                           Checked="AlwaysOnTopCheckBox_Changed"
@@ -54,7 +54,7 @@
 
                 <Button x:Name="StartButton"
                         Grid.Column="0"
-                        Content="▶ Старт"
+                        Content="▶ Start"
                         Click="StartButton_Click"
                         Background="#2fb36d"
                         Foreground="White"
@@ -65,7 +65,7 @@
 
                 <Button x:Name="StopButton"
                         Grid.Column="1"
-                        Content="■ Стоп"
+                        Content="■ Stop"
                         Click="StopButton_Click"
                         Background="#c7445b"
                         Foreground="White"
@@ -76,7 +76,7 @@
                         Margin="0,0,10,0"/>
 
                 <Button Grid.Column="2"
-                        Content="Очистить"
+                        Content="Clear"
                         Click="ClearButton_Click"
                         Background="#33405f"
                         Foreground="White"
@@ -85,7 +85,7 @@
                         Margin="0,0,10,0"/>
 
                 <Button Grid.Column="3"
-                        Content="Сохранить .txt"
+                        Content="Save .txt"
                         Click="SaveButton_Click"
                         Background="#33405f"
                         Foreground="White"
@@ -95,18 +95,18 @@
 
                 <StackPanel Grid.Column="4" VerticalAlignment="Center">
                     <TextBlock x:Name="ModelStatusText"
-                               Text="Модель Whisper не загружена"
+                               Text="Model status"
                                Foreground="#dce5f3"
                                FontWeight="SemiBold"/>
                     <TextBlock x:Name="AudioStatusText"
-                               Text="Источник: микрофон"
+                               Text="Source: microphone"
                                Foreground="#9aa7bd"
                                FontSize="12"
                                Margin="0,3,0,0"/>
                 </StackPanel>
 
                 <StackPanel Grid.Column="5" VerticalAlignment="Center">
-                    <TextBlock Text="УРОВЕНЬ ЗВУКА" Foreground="#9aa7bd" FontSize="11" Margin="0,0,0,5"/>
+                    <TextBlock Text="AUDIO LEVEL" Foreground="#9aa7bd" FontSize="11" Margin="0,0,0,5"/>
                     <ProgressBar x:Name="AudioLevelBar"
                                  Minimum="0"
                                  Maximum="1"
@@ -119,7 +119,7 @@
         <Grid Grid.Row="2" Margin="18,0,18,12">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="280"/>
+                <ColumnDefinition Width="300"/>
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0" Background="#080b12" BorderBrush="#2b3552" BorderThickness="1" CornerRadius="8" Padding="14">
@@ -130,144 +130,208 @@
 
             <Border Grid.Column="1" Background="#181c27" CornerRadius="8" Padding="14" Margin="12,0,0,0">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <StackPanel>
-                    <TextBlock Text="Настройки" Foreground="#f4f7fb" FontSize="17" FontWeight="SemiBold"/>
+                    <StackPanel>
+                        <TextBlock Text="Settings" Foreground="#f4f7fb" FontSize="17" FontWeight="SemiBold"/>
 
-                    <TextBlock Text="Общие" Foreground="#7cd4ff" FontSize="12" FontWeight="SemiBold" Margin="0,16,0,0"/>
-                    <TextBlock Text="Источник звука" Foreground="#9aa7bd" FontSize="11" Margin="0,18,0,5"/>
-                    <ComboBox x:Name="AudioSourceComboBox" SelectedIndex="0" SelectionChanged="AudioSourceComboBox_SelectionChanged">
-                        <ComboBoxItem Content="Микрофон"/>
-                        <ComboBoxItem Content="Системный звук Windows"/>
-                    </ComboBox>
-
-                    <TextBlock Text="Язык" Foreground="#9aa7bd" FontSize="11" Margin="0,18,0,5"/>
-                    <ComboBox x:Name="LanguageComboBox" SelectedIndex="1" SelectionChanged="LanguageComboBox_SelectionChanged">
-                        <ComboBoxItem Content="auto"/>
-                        <ComboBoxItem Content="ru"/>
-                        <ComboBoxItem Content="en"/>
-                        <ComboBoxItem Content="uk"/>
-                    </ComboBox>
-
-                    <TextBlock Text="Движок распознавания" Foreground="#9aa7bd" FontSize="11" Margin="0,18,0,5"/>
-                    <ComboBox x:Name="EngineComboBox" SelectedIndex="3" SelectionChanged="EngineComboBox_SelectionChanged">
-                        <ComboBoxItem Content="Whisper balanced" Tag="whisper-balanced"/>
-                        <ComboBoxItem Content="Whisper fast / raw" Tag="whisper-fast"/>
-                        <ComboBoxItem Content="Windows Speech Recognition" Tag="windows-speech"/>
-                        <ComboBoxItem Content="Vosk local" Tag="vosk-local"/>
-                    </ComboBox>
-
-                    <StackPanel x:Name="VoskSettingsPanel" Margin="0,18,0,0">
-                        <TextBlock Text="Vosk local" Foreground="#7cd4ff" FontSize="12" FontWeight="SemiBold"/>
-                        <TextBlock x:Name="VoskModelStatusText"
-                                   Text="Vosk model status"
+                        <TextBlock Text="Profile" Foreground="#9aa7bd" FontSize="11" Margin="0,16,0,5"/>
+                        <ComboBox x:Name="ProfileComboBox" SelectedIndex="1" SelectionChanged="ProfileComboBox_SelectionChanged">
+                            <ComboBoxItem Content="Meeting" Tag="meeting"/>
+                            <ComboBoxItem Content="Podcast / Video" Tag="podcast"/>
+                            <ComboBoxItem Content="Interview practice" Tag="interview"/>
+                            <ComboBoxItem Content="Dictation" Tag="dictation"/>
+                            <ComboBoxItem Content="Custom" Tag="custom"/>
+                        </ComboBox>
+                        <TextBlock x:Name="ProfileHintText"
+                                   Text="Default for English monologues and videos: OpenAI fast, system audio, one speaker."
                                    Foreground="#9aa7bd"
                                    FontSize="12"
                                    TextWrapping="Wrap"
                                    Margin="0,8,0,0"/>
 
-                        <CheckBox x:Name="VoskPartialResultsCheckBox"
-                                  Content="Быстрый live-текст"
-                                  IsChecked="True"
-                                  Foreground="#dce5f3"
-                                  Margin="0,10,0,0"/>
-
-                        <CheckBox x:Name="VoskInterviewVocabularyCheckBox"
-                                  Content="Словарь для интервью"
-                                  IsChecked="False"
-                                  Foreground="#dce5f3"
-                                  Margin="0,6,0,0"/>
-
-                        <TextBlock x:Name="VoskSystemAudioGainLabel" Text="Усиление системного звука" Foreground="#9aa7bd" FontSize="11" Margin="0,12,0,5"/>
-                        <Slider x:Name="VoskSystemAudioGainSlider" Minimum="0.5" Maximum="4" Value="1.6" TickFrequency="0.25" IsSnapToTickEnabled="True"/>
-                        <TextBlock x:Name="VoskSystemAudioGainValueText"
-                                   Text="{Binding ElementName=VoskSystemAudioGainSlider, Path=Value, StringFormat={}{0:0.00}x}"
-                                   Foreground="#dce5f3"
-                                   FontSize="12"/>
-
-                        <CheckBox x:Name="VoskSystemNoiseGateCheckBox"
-                                  Content="Шумовой порог для системного звука"
-                                  IsChecked="True"
-                                  Foreground="#dce5f3"
-                                  Margin="0,6,0,0"/>
-
-                        <CheckBox x:Name="VoskAutoSpeakerTurnsCheckBox"
-                                  Content="Делить роли по паузам"
-                                  IsChecked="True"
-                                  Foreground="#dce5f3"
-                                  Margin="0,6,0,0"/>
-
-                        <CheckBox x:Name="VoskSpeakerVectorsCheckBox"
-                                  Content="Различать роли по голосу"
-                                  IsChecked="True"
-                                  Foreground="#dce5f3"
-                                  Margin="0,6,0,0"/>
-
-                        <TextBlock x:Name="VoskSpeakerVectorThresholdLabel" Text="Порог похожести голосов" Foreground="#9aa7bd" FontSize="11" Margin="0,12,0,5"/>
-                        <Slider x:Name="VoskSpeakerVectorThresholdSlider" Minimum="0.55" Maximum="0.95" Value="0.82" TickFrequency="0.01" IsSnapToTickEnabled="True"/>
-                        <TextBlock x:Name="VoskSpeakerVectorThresholdValueText"
-                                   Text="{Binding ElementName=VoskSpeakerVectorThresholdSlider, Path=Value, StringFormat={}{0:0.00}}"
-                                   Foreground="#dce5f3"
-                                   FontSize="12"/>
-
-                        <TextBlock x:Name="VoskSpeakerPauseLabel" Text="Пауза смены роли" Foreground="#9aa7bd" FontSize="11" Margin="0,12,0,5"/>
-                        <Slider x:Name="VoskSpeakerPauseSlider" Minimum="0.8" Maximum="3" Value="1.4" TickFrequency="0.2" IsSnapToTickEnabled="True"/>
-                        <TextBlock x:Name="VoskSpeakerPauseValueText"
-                                   Text="{Binding ElementName=VoskSpeakerPauseSlider, Path=Value, StringFormat={}{0:0.0} сек.}"
-                                   Foreground="#dce5f3"
-                                   FontSize="12"/>
-
-                        <CheckBox x:Name="VoskSentenceFormattingCheckBox"
-                                  Content="Форматировать предложения"
-                                  IsChecked="True"
-                                  Foreground="#dce5f3"
-                                  Margin="0,6,0,0"/>
-                    </StackPanel>
-
-                    <StackPanel x:Name="WhisperSettingsPanel" Margin="0,18,0,0">
-                        <TextBlock Text="Whisper" Foreground="#7cd4ff" FontSize="12" FontWeight="SemiBold"/>
-                        <TextBlock Text="Модель Whisper" Foreground="#9aa7bd" FontSize="11" Margin="0,10,0,5"/>
-                        <ComboBox x:Name="ModelComboBox" SelectedIndex="0" SelectionChanged="ModelComboBox_SelectionChanged">
-                            <ComboBoxItem Content="base - быстрее, ниже точность" Tag="base"/>
-                            <ComboBoxItem Content="small - точнее, медленнее" Tag="small"/>
+                        <TextBlock Text="Source" Foreground="#9aa7bd" FontSize="11" Margin="0,16,0,5"/>
+                        <ComboBox x:Name="AudioSourceComboBox" SelectedIndex="1" SelectionChanged="AudioSourceComboBox_SelectionChanged">
+                            <ComboBoxItem Content="Microphone"/>
+                            <ComboBoxItem Content="Windows system audio"/>
                         </ComboBox>
 
-                        <TextBlock Text="Длина аудио-куска, сек." Foreground="#9aa7bd" FontSize="11" Margin="0,16,0,5"/>
-                        <Slider x:Name="ChunkSecondsSlider" Minimum="1" Maximum="8" Value="3" TickFrequency="1" IsSnapToTickEnabled="True"/>
-                        <TextBlock Text="{Binding ElementName=ChunkSecondsSlider, Path=Value, StringFormat={}{0:0} сек.}"
-                                   Foreground="#dce5f3"
-                                   FontSize="12"/>
+                        <TextBlock Text="Language" Foreground="#9aa7bd" FontSize="11" Margin="0,16,0,5"/>
+                        <ComboBox x:Name="LanguageComboBox" SelectedIndex="2" SelectionChanged="LanguageComboBox_SelectionChanged">
+                            <ComboBoxItem Content="auto"/>
+                            <ComboBoxItem Content="ru"/>
+                            <ComboBoxItem Content="en"/>
+                            <ComboBoxItem Content="uk"/>
+                        </ComboBox>
 
-                        <Button x:Name="DownloadModelButton"
-                                Content="Скачать base-модель"
-                                Click="DownloadModelButton_Click"
-                                Background="#33405f"
-                                Foreground="White"
-                                BorderThickness="0"
-                                Padding="14,9"
-                                Margin="0,20,0,0"/>
+                        <TextBlock Text="Recognition engine" Foreground="#9aa7bd" FontSize="11" Margin="0,16,0,5"/>
+                        <ComboBox x:Name="EngineComboBox" SelectedIndex="4" SelectionChanged="EngineComboBox_SelectionChanged">
+                            <ComboBoxItem Content="Whisper balanced" Tag="whisper-balanced"/>
+                            <ComboBoxItem Content="Whisper fast / raw" Tag="whisper-fast"/>
+                            <ComboBoxItem Content="Windows Speech Recognition" Tag="windows-speech"/>
+                            <ComboBoxItem Content="Vosk local" Tag="vosk-local"/>
+                            <ComboBoxItem Content="OpenAI cloud - fast" Tag="openai-cloud"/>
+                            <ComboBoxItem Content="OpenAI diarize - slower" Tag="openai-diarize"/>
+                            <ComboBoxItem Content="Sherpa-ONNX local" Tag="sherpa-onnx"/>
+                        </ComboBox>
 
-                        <TextBlock TextWrapping="Wrap"
-                                   Foreground="#9aa7bd"
-                                   FontSize="12"
-                                   Margin="0,16,0,0"
-                                   Text="Whisper использует ggml-модели в папке C:\Projects\LiveCaptioner\Models."/>
+                        <StackPanel x:Name="VoskSettingsPanel" Margin="0,18,0,0">
+                            <TextBlock Text="Vosk local" Foreground="#7cd4ff" FontSize="12" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="VoskModelStatusText"
+                                       Text="Vosk model status"
+                                       Foreground="#9aa7bd"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Margin="0,8,0,0"/>
+
+                            <Expander Header="Advanced Vosk settings"
+                                      Foreground="#dce5f3"
+                                      Margin="0,12,0,0"
+                                      IsExpanded="False">
+                                <StackPanel Margin="0,8,0,0">
+                                    <CheckBox x:Name="VoskPartialResultsCheckBox"
+                                              Content="Fast live text"
+                                              IsChecked="True"
+                                              Foreground="#dce5f3"
+                                              Margin="0,6,0,0"/>
+
+                                    <CheckBox x:Name="VoskInterviewVocabularyCheckBox"
+                                              Content="Interview vocabulary"
+                                              IsChecked="False"
+                                              Foreground="#dce5f3"
+                                              Margin="0,6,0,0"/>
+
+                                    <TextBlock x:Name="VoskSystemAudioGainLabel" Text="System audio gain" Foreground="#9aa7bd" FontSize="11" Margin="0,12,0,5"/>
+                                    <Slider x:Name="VoskSystemAudioGainSlider" Minimum="0.5" Maximum="4" Value="1.6" TickFrequency="0.25" IsSnapToTickEnabled="True"/>
+                                    <TextBlock x:Name="VoskSystemAudioGainValueText"
+                                               Text="{Binding ElementName=VoskSystemAudioGainSlider, Path=Value, StringFormat={}{0:0.00}x}"
+                                               Foreground="#dce5f3"
+                                               FontSize="12"/>
+
+                                    <CheckBox x:Name="VoskSystemNoiseGateCheckBox"
+                                              Content="System audio noise gate"
+                                              IsChecked="True"
+                                              Foreground="#dce5f3"
+                                              Margin="0,6,0,0"/>
+
+                                    <CheckBox x:Name="VoskAutoSpeakerTurnsCheckBox"
+                                              Content="New paragraph after long silence"
+                                              IsChecked="False"
+                                              Foreground="#dce5f3"
+                                              Margin="0,6,0,0"/>
+
+                                    <CheckBox x:Name="VoskSpeakerVectorsCheckBox"
+                                              Content="Split speakers by voice"
+                                              IsChecked="True"
+                                              Foreground="#dce5f3"
+                                              Margin="0,6,0,0"/>
+
+                                    <TextBlock x:Name="VoskSpeakerVectorThresholdLabel" Text="New speaker threshold" Foreground="#9aa7bd" FontSize="11" Margin="0,12,0,5"/>
+                                    <Slider x:Name="VoskSpeakerVectorThresholdSlider" Minimum="0.40" Maximum="0.90" Value="0.65" TickFrequency="0.01" IsSnapToTickEnabled="True"/>
+                                    <TextBlock x:Name="VoskSpeakerVectorThresholdValueText"
+                                               Text="{Binding ElementName=VoskSpeakerVectorThresholdSlider, Path=Value, StringFormat={}{0:0.00}}"
+                                               Foreground="#dce5f3"
+                                               FontSize="12"/>
+
+                                    <TextBlock x:Name="VoskSpeakerPauseLabel" Text="Long silence threshold" Foreground="#9aa7bd" FontSize="11" Margin="0,12,0,5"/>
+                                    <Slider x:Name="VoskSpeakerPauseSlider" Minimum="2" Maximum="8" Value="4" TickFrequency="0.5" IsSnapToTickEnabled="True"/>
+                                    <TextBlock x:Name="VoskSpeakerPauseValueText"
+                                               Text="{Binding ElementName=VoskSpeakerPauseSlider, Path=Value, StringFormat={}{0:0.0} sec.}"
+                                               Foreground="#dce5f3"
+                                               FontSize="12"/>
+
+                                    <CheckBox x:Name="VoskSentenceFormattingCheckBox"
+                                              Content="Format sentences"
+                                              IsChecked="True"
+                                              Foreground="#dce5f3"
+                                              Margin="0,6,0,0"/>
+                                </StackPanel>
+                            </Expander>
+                        </StackPanel>
+
+                        <StackPanel x:Name="WhisperSettingsPanel" Margin="0,18,0,0">
+                            <TextBlock Text="Whisper" Foreground="#7cd4ff" FontSize="12" FontWeight="SemiBold"/>
+                            <TextBlock Text="Whisper model" Foreground="#9aa7bd" FontSize="11" Margin="0,10,0,5"/>
+                            <ComboBox x:Name="ModelComboBox" SelectedIndex="0" SelectionChanged="ModelComboBox_SelectionChanged">
+                                <ComboBoxItem Content="base - faster, lower accuracy" Tag="base"/>
+                                <ComboBoxItem Content="small - more accurate, slower" Tag="small"/>
+                            </ComboBox>
+
+                            <TextBlock Text="Audio chunk length, sec." Foreground="#9aa7bd" FontSize="11" Margin="0,16,0,5"/>
+                            <Slider x:Name="ChunkSecondsSlider" Minimum="1" Maximum="8" Value="3" TickFrequency="1" IsSnapToTickEnabled="True"/>
+                            <TextBlock Text="{Binding ElementName=ChunkSecondsSlider, Path=Value, StringFormat={}{0:0} sec.}"
+                                       Foreground="#dce5f3"
+                                       FontSize="12"/>
+
+                            <Button x:Name="DownloadModelButton"
+                                    Content="Download base model"
+                                    Click="DownloadModelButton_Click"
+                                    Background="#33405f"
+                                    Foreground="White"
+                                    BorderThickness="0"
+                                    Padding="14,9"
+                                    Margin="0,20,0,0"/>
+
+                            <TextBlock TextWrapping="Wrap"
+                                       Foreground="#9aa7bd"
+                                       FontSize="12"
+                                       Margin="0,16,0,0"
+                                       Text="Whisper uses ggml models in C:\Projects\LiveCaptioner\Models."/>
+                        </StackPanel>
+
+                        <StackPanel x:Name="OpenAISettingsPanel" Margin="0,18,0,0">
+                            <TextBlock Text="OpenAI cloud" Foreground="#7cd4ff" FontSize="12" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="OpenAIStatusText"
+                                       Text="Set OPENAI_API_KEY in the environment."
+                                       Foreground="#9aa7bd"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Margin="0,8,0,0"/>
+
+                            <TextBlock x:Name="OpenAIChunkLabel" Text="Realtime streaming" Foreground="#9aa7bd" FontSize="11" Margin="0,16,0,5"/>
+                            <CheckBox x:Name="OpenAIRealtimeSpeakerSplitCheckBox"
+                                      Content="Split speakers locally by voice"
+                                      IsChecked="True"
+                                      Foreground="#dce5f3"
+                                      Margin="0,8,0,0"/>
+                            <Slider x:Name="OpenAIChunkSecondsSlider" Minimum="6" Maximum="30" Value="15" TickFrequency="1" IsSnapToTickEnabled="True" Visibility="Collapsed"/>
+                            <TextBlock Text="{Binding ElementName=OpenAIChunkSecondsSlider, Path=Value, StringFormat={}{0:0} sec.}"
+                                       x:Name="OpenAIChunkSecondsValueText"
+                                       Foreground="#dce5f3"
+                                       FontSize="12"
+                                       Visibility="Collapsed"/>
+
+                            <TextBlock x:Name="OpenAIHelpText"
+                                       TextWrapping="Wrap"
+                                       Foreground="#9aa7bd"
+                                       FontSize="12"
+                                       Margin="0,14,0,0"
+                                       Text="Streams audio to gpt-realtime-whisper and treats the result as one Monologue speaker."/>
+                        </StackPanel>
+
+                        <StackPanel x:Name="SherpaSettingsPanel" Margin="0,18,0,0">
+                            <TextBlock Text="Sherpa-ONNX local" Foreground="#7cd4ff" FontSize="12" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="SherpaStatusText"
+                                       Text="Runtime bridge is not installed yet."
+                                       Foreground="#9aa7bd"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Margin="0,8,0,0"/>
+                        </StackPanel>
+
+                        <StackPanel x:Name="WindowsSpeechSettingsPanel" Margin="0,18,0,0">
+                            <TextBlock Text="Windows Speech" Foreground="#7cd4ff" FontSize="12" FontWeight="SemiBold"/>
+                            <TextBlock TextWrapping="Wrap"
+                                       Foreground="#9aa7bd"
+                                       FontSize="12"
+                                       Margin="0,8,0,0"
+                                       Text="Uses built-in Windows Speech Recognition. No special settings are available."/>
+                        </StackPanel>
                     </StackPanel>
-
-                    <StackPanel x:Name="WindowsSpeechSettingsPanel" Margin="0,18,0,0">
-                        <TextBlock Text="Windows Speech" Foreground="#7cd4ff" FontSize="12" FontWeight="SemiBold"/>
-                        <TextBlock TextWrapping="Wrap"
-                                   Foreground="#9aa7bd"
-                                   FontSize="12"
-                                   Margin="0,8,0,0"
-                                   Text="Использует встроенный Windows Speech Recognition и только микрофон. Специальных настроек пока нет."/>
-                    </StackPanel>
-                </StackPanel>
                 </ScrollViewer>
             </Border>
         </Grid>
 
         <Border Grid.Row="3" Background="#181c27" Padding="18,10">
-            <TextBlock x:Name="StatusText" Text="Готово." Foreground="#9aa7bd" FontSize="12"/>
+            <TextBlock x:Name="StatusText" Text="Ready." Foreground="#9aa7bd" FontSize="12"/>
         </Border>
     </Grid>
 </Window>

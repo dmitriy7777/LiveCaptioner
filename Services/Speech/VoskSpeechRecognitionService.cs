@@ -13,6 +13,8 @@ public sealed class VoskSpeechRecognitionService : IDisposable
     private readonly string _modelsDirectory;
     private Model? _model;
     private SpkModel? _speakerModel;
+    private string? _loadedModelPath;
+    private string? _loadedSpeakerModelPath;
     private VoskRecognizer? _recognizer;
     private WaveInEvent? _microphoneCapture;
     private WasapiLoopbackCapture? _systemCapture;
@@ -60,6 +62,10 @@ public sealed class VoskSpeechRecognitionService : IDisposable
     public bool HasSpeakerModel()
         => Directory.Exists(GetSpeakerModelPath());
 
+    public bool IsModelLoaded(string language)
+        => _model != null &&
+           string.Equals(_loadedModelPath, GetModelPath(language), StringComparison.OrdinalIgnoreCase);
+
     public void Start(string language, VoskAudioSource audioSource, VoskRecognitionOptions options)
     {
         AppLogger.Info("Vosk service Start entered.");
@@ -74,27 +80,17 @@ public sealed class VoskSpeechRecognitionService : IDisposable
         }
 
         Vosk.Vosk.SetLogLevel(-1);
-        AppLogger.Memory("Before Vosk Model load");
-        AppLogger.Info("Loading Vosk Model...");
-        _model = new Model(modelPath);
-        AppLogger.Memory("After Vosk Model load");
+        EnsureModelLoaded(modelPath);
         AppLogger.Info("Creating VoskRecognizer...");
         _recognizer = options.UseInterviewVocabulary
             ? new VoskRecognizer(_model, Pcm16kMonoConverter.TargetSampleRate, BuildInterviewGrammar())
             : new VoskRecognizer(_model, Pcm16kMonoConverter.TargetSampleRate);
-        var speakerModelPath = GetSpeakerModelPath();
-        if (Directory.Exists(speakerModelPath))
+        EnsureSpeakerModelLoaded();
+
+        if (_speakerModel != null)
         {
-            AppLogger.Info($"Loading Vosk speaker model: {speakerModelPath}");
-            AppLogger.Memory("Before Vosk SpkModel load");
-            _speakerModel = new SpkModel(speakerModelPath);
             _recognizer.SetSpkModel(_speakerModel);
-            AppLogger.Memory("After Vosk SpkModel load");
-            AppLogger.Info("Vosk speaker model enabled.");
-        }
-        else
-        {
-            AppLogger.Warn($"Vosk speaker model not found: {speakerModelPath}");
+            AppLogger.Info("Vosk speaker model enabled for current recognizer.");
         }
 
         _recognizer.SetWords(false);
@@ -153,6 +149,11 @@ public sealed class VoskSpeechRecognitionService : IDisposable
 
     public void Stop()
     {
+        StopRuntime(unloadModels: false);
+    }
+
+    private void StopRuntime(bool unloadModels)
+    {
         AppLogger.Info("Vosk service Stop entered.");
         _processingCancellation?.Cancel();
         if (_microphoneCapture != null)
@@ -196,16 +197,77 @@ public sealed class VoskSpeechRecognitionService : IDisposable
         _pcmConverter = null;
         _recognizer?.Dispose();
         _recognizer = null;
-        _speakerModel?.Dispose();
-        _speakerModel = null;
-        _model?.Dispose();
-        _model = null;
+        if (unloadModels)
+        {
+            UnloadModels();
+        }
+
         AppLogger.Memory("After Vosk service stop");
         AppLogger.Info("Vosk service Stop completed.");
     }
 
     public void Dispose()
-        => Stop();
+        => StopRuntime(unloadModels: true);
+
+    private void EnsureModelLoaded(string modelPath)
+    {
+        if (_model != null &&
+            string.Equals(_loadedModelPath, modelPath, StringComparison.OrdinalIgnoreCase))
+        {
+            AppLogger.Info($"Reusing already loaded Vosk Model: {modelPath}");
+            return;
+        }
+
+        UnloadModels();
+        AppLogger.Memory("Before Vosk Model load");
+        AppLogger.Info($"Loading Vosk Model: {modelPath}");
+        _model = new Model(modelPath);
+        _loadedModelPath = modelPath;
+        AppLogger.Memory("After Vosk Model load");
+    }
+
+    private void EnsureSpeakerModelLoaded()
+    {
+        var speakerModelPath = GetSpeakerModelPath();
+        if (!Directory.Exists(speakerModelPath))
+        {
+            if (_speakerModel != null)
+            {
+                _speakerModel.Dispose();
+                _speakerModel = null;
+                _loadedSpeakerModelPath = null;
+            }
+
+            AppLogger.Warn($"Vosk speaker model not found: {speakerModelPath}");
+            return;
+        }
+
+        if (_speakerModel != null &&
+            string.Equals(_loadedSpeakerModelPath, speakerModelPath, StringComparison.OrdinalIgnoreCase))
+        {
+            AppLogger.Info($"Reusing already loaded Vosk speaker model: {speakerModelPath}");
+            return;
+        }
+
+        _speakerModel?.Dispose();
+        _speakerModel = null;
+        _loadedSpeakerModelPath = null;
+        AppLogger.Info($"Loading Vosk speaker model: {speakerModelPath}");
+        AppLogger.Memory("Before Vosk SpkModel load");
+        _speakerModel = new SpkModel(speakerModelPath);
+        _loadedSpeakerModelPath = speakerModelPath;
+        AppLogger.Memory("After Vosk SpkModel load");
+    }
+
+    private void UnloadModels()
+    {
+        _speakerModel?.Dispose();
+        _speakerModel = null;
+        _loadedSpeakerModelPath = null;
+        _model?.Dispose();
+        _model = null;
+        _loadedModelPath = null;
+    }
 
     private void OnDataAvailable(object? sender, WaveInEventArgs e)
     {
